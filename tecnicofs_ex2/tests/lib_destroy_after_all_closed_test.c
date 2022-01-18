@@ -40,6 +40,7 @@ int main() {
 
     pthread_t t;
     assert(pthread_create(&t, NULL, fn_thread, NULL) == 0);
+    sleep(1);
     assert(tfs_destroy_after_all_closed() != -1);
     assert(closed_file == 1);
 

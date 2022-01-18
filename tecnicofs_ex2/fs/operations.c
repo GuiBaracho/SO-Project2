@@ -8,7 +8,7 @@
 static pthread_mutex_t single_global_lock;
 static pthread_cond_t canDestroy;
 static int open_files = 0;
-static bool closing = false;
+static bool shutdown = true;
 
 int tfs_init() {
     state_init();
@@ -22,13 +22,14 @@ int tfs_init() {
         return -1;
     }
 
+    shutdown = false;
+
     return 0;
 }
 
 int tfs_destroy() {
     state_destroy();
     if (pthread_mutex_destroy(&single_global_lock) != 0) {
-        printf("%d\n", pthread_mutex_destroy(&single_global_lock));
         return -1;
     }
     return 0;
@@ -44,7 +45,7 @@ int tfs_destroy_after_all_closed() {
     if(pthread_mutex_lock(&single_global_lock) != 0)
         return -1;
 
-    closing = true;
+    shutdown = true;
 
     while(open_files != 0)
         pthread_cond_wait(&canDestroy, &single_global_lock);
@@ -55,8 +56,6 @@ int tfs_destroy_after_all_closed() {
     if(tfs_destroy() != 0)
         return -1;
 
-    closing = false;
-    
     return 0;
 }
 //--------------------
@@ -85,8 +84,9 @@ static int _tfs_open_unsynchronized(char const *name, int flags) {
     int inum;
     size_t offset;
 
-    if(closing)
+    if(shutdown) {
         return -1;
+    }
 
     inum = _tfs_lookup_unsynchronized(name);
     if (inum >= 0) {
@@ -140,11 +140,16 @@ static int _tfs_open_unsynchronized(char const *name, int flags) {
 }
 
 int tfs_open(char const *name, int flags) {
-    if (pthread_mutex_lock(&single_global_lock) != 0)
+
+    if (pthread_mutex_lock(&single_global_lock) != 0) {
         return -1;
+    }
+
     int ret = _tfs_open_unsynchronized(name, flags);
-    if (pthread_mutex_unlock(&single_global_lock) != 0)
+
+    if (pthread_mutex_unlock(&single_global_lock) != 0) {
         return -1;
+    }
 
     return ret;
 }
