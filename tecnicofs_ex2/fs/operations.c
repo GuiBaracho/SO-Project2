@@ -29,9 +29,6 @@ int tfs_init() {
 
 int tfs_destroy() {
     state_destroy();
-    if (pthread_mutex_destroy(&single_global_lock) != 0) {
-        return -1;
-    }
     return 0;
 }
 
@@ -49,11 +46,11 @@ int tfs_destroy_after_all_closed() {
 
     while(open_files != 0)
         pthread_cond_wait(&canDestroy, &single_global_lock);
-
-    if(pthread_mutex_unlock(&single_global_lock) != 0)
-        return -1;
     
     if(tfs_destroy() != 0)
+        return -1;
+
+    if(pthread_mutex_unlock(&single_global_lock) != 0)
         return -1;
 
     return 0;
