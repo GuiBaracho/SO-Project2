@@ -1,8 +1,14 @@
 #ifndef CLIENT_API_H
 #define CLIENT_API_H
 
-#include "common/common.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include "common/common.h"
 
 /*
  * Establishes a session with a TecnicoFS server.

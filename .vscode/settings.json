@@ -1,5 +1,10 @@
 {
     "files.associations": {
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "types.h": "c",
+        "stat.h": "c",
+        "stdlib.h": "c",
+        "string.h": "c",
+        "tecnicofs_client_api.h": "c"
     }
 }
