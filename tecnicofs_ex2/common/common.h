@@ -19,6 +19,6 @@ enum {
     TFS_OP_CODE_SHUTDOWN_AFTER_ALL_CLOSED = 7
 };
 
-#define MAX_NAME_SIZE 45
+#define MAX_NAME_SIZE 40
 
 #endif /* COMMON_H */
