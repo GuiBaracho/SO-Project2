@@ -169,6 +169,22 @@ int tfs_server_read() {
     return 0;
 }
 
+int tfs_shutdown_after_all_closed() {
+    ssize_t n;
+    int session_id, return_value = 0;
+
+    n = read(server_pipe, &session_id, sizeof(int));
+    if(n <= 0) return -1;
+    /*printf("session id: %d\n", session_id);*/
+
+    return_value = tfs_destroy_after_all_closed();
+
+    n = write(single.client_pipe, &return_value, sizeof(int));
+    if(n <= 0) return -1;
+
+    return 0;    
+}
+
 int main(int argc, char **argv) {
 
     ssize_t n;
@@ -204,7 +220,7 @@ int main(int argc, char **argv) {
             break;
 
         case TFS_OP_CODE_UNMOUNT:
-        /**/printf("unmount\n");
+        /*printf("unmount\n");*/
             tfs_unmount();
             break;
 
@@ -226,6 +242,11 @@ int main(int argc, char **argv) {
         case TFS_OP_CODE_READ:
         /*printf("read\n");*/
             tfs_server_read();
+            break;
+
+        case TFS_OP_CODE_SHUTDOWN_AFTER_ALL_CLOSED:
+        /*printf("shutdown\n");*/
+            tfs_shutdown_after_all_closed();
             break;
         
         default:

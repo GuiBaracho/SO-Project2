@@ -176,5 +176,18 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t length) {
 
 int tfs_shutdown_after_all_closed() {
     /* TODO: Implement this */
-    return -1;
+    ssize_t n;
+    int return_value;
+    char op_code = TFS_OP_CODE_SHUTDOWN_AFTER_ALL_CLOSED;
+
+    n = write(server_pipe, &op_code, sizeof(char));
+    if(n <= 0) return -1;
+
+    n = write(server_pipe, &session_id, sizeof(int));
+    if(n <= 0) return -1;
+
+    n = read(client_pipe, &return_value, sizeof(int));
+    if(n <= 0) return -1;
+
+    return return_value;
 }
