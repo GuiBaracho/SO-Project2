@@ -19,9 +19,9 @@ int tfs_mount(char const *client_pipe_path, char const *server_pipe_path) {
         client_path[i] = '\0';
     /*printf("%s\n", client_path);*/
     unlink(client_path);
-    if(mkfifo(client_path, 0777) < 0) exit(1);
+    if(mkfifo(client_path, 0777) < 0) return -1;
 
-    if((server_pipe = open(server_path, O_WRONLY)) < 0) exit(1);
+    if((server_pipe = open(server_path, O_WRONLY)) < 0) return -1;
     /*printf("open server\n");*/
 
     n = write(server_pipe, &op_code, sizeof(char));
@@ -32,7 +32,7 @@ int tfs_mount(char const *client_pipe_path, char const *server_pipe_path) {
     if(n <= 0) return -1;
     /*printf("write name\n");*/
 
-    if((client_pipe = open(client_path, O_RDONLY)) < 0) exit(1);
+    if((client_pipe = open(client_path, O_RDONLY)) < 0) return -1;
     /*printf("open client\n");*/
     n = read(client_pipe, &session_id, sizeof(int));
     if(n <= 0) return -1;
@@ -46,7 +46,7 @@ int tfs_unmount() {
     ssize_t n;
     int return_value;
     char op_code = TFS_OP_CODE_UNMOUNT;
-
+    /*printf("start\n");*/
     n = write(server_pipe, &op_code, sizeof(char));
     if(n <= 0) return -1;
     /*printf("opcode\n");*/
@@ -57,7 +57,7 @@ int tfs_unmount() {
 
     n = read(client_pipe, &return_value, sizeof(int));
     if(n <= 0) return -1;
-
+    /*printf("returnValue\n");*/
     close(client_pipe);
     close(server_pipe);
     unlink(client_path);
@@ -188,6 +188,8 @@ int tfs_shutdown_after_all_closed() {
 
     n = read(client_pipe, &return_value, sizeof(int));
     if(n <= 0) return -1;
+
+    close(server_pipe);
 
     return return_value;
 }
