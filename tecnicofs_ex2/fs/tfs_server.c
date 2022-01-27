@@ -17,10 +17,12 @@ typedef struct {
 } session;
 
 static pthread_mutex_t session_lock;
+static pthread_mutex_t read_lock;
 static int active_sessions = 0;
 static session sessions[MAX_SESSIONS];
 
 int tfs_mount() {
+    /**/printf("mount\n");
     ssize_t n;
     int session_id;
     char pipename[MAX_NAME_SIZE];
@@ -54,6 +56,7 @@ int tfs_mount() {
 }
 
 int tfs_unmount() {
+    /**/printf("unmount\n");
     ssize_t n;
     int session_id, client_pipe, return_value = 0;
 
@@ -77,6 +80,7 @@ int tfs_unmount() {
 }
 
 int tfs_server_open() {
+    /**/printf("open\n");
     ssize_t n;
     int session_id, flags, return_value = 0;
     char filename[MAX_NAME_SIZE];
@@ -102,6 +106,7 @@ int tfs_server_open() {
 }
 
 int tfs_server_close() {
+    /**/printf("close\n");
     ssize_t n;
     int session_id, fhandle, return_value = 0;
 
@@ -122,6 +127,7 @@ int tfs_server_close() {
 }
 
 int tfs_server_write() {
+    /**/printf("write\n");
     ssize_t n, return_value = 0;
     size_t length;
     int session_id, fhandle;
@@ -152,6 +158,7 @@ int tfs_server_write() {
 }
 
 int tfs_server_read() {
+    /**/printf("read\n");
     ssize_t n, return_value = 0;
     size_t length;
     int session_id, fhandle;
@@ -183,6 +190,7 @@ int tfs_server_read() {
 }
 
 int tfs_shutdown_after_all_closed(char *server_path) {
+    /**/printf("shutdown\n");
     ssize_t n;
     int session_id, return_value = 0;
 
@@ -238,13 +246,16 @@ int main(int argc, char **argv) {
             
 
     for(;;) {
-        n = read(server_pipe, &op_code, 1);
+        
+        n = read(server_pipe, &op_code, sizeof(char));
         if(n < 0) { printf("main: read opcode\n"); return -1; }
         else if(n == 0) {
+            printf("main: n == 0\n");
             close(server_pipe);
             unlink(server_path);
             if(mkfifo(server_path, 0777) < 0) { printf("main: mkfifo\n"); return -1; }
             if((server_pipe = open(server_path, O_RDONLY)) < 0) { printf("main: open server pipe\n"); return -1; }
+            continue;
         }
 
         switch(op_code) {
