@@ -8,12 +8,15 @@
 #include <pthread.h>
 #include "operations.h"
 
-#define MAX_SESSIONS 1
+#define MAX_SESSIONS 10
 
 static int server_pipe;
+char server_path[MAX_NAME_SIZE] = "/tmp/";
 
 typedef struct {
+    int id;
     int client_pipe;
+    pthread_t tid;
 } session;
 
 static pthread_mutex_t session_lock;
@@ -24,12 +27,12 @@ static session sessions[MAX_SESSIONS];
 int tfs_mount() {
     /**/printf("mount\n");
     ssize_t n;
-    int session_id;
+    int session_id, client_pipe;
     char pipename[MAX_NAME_SIZE];
 
     n = read(server_pipe, pipename, 40);
     if(n <= 0) { printf("mount: read pipename\n"); pthread_mutex_unlock(&read_lock); return -1; }
-    /*printf("%s\n", pipename);*/
+    /**/printf("%s\n", pipename);
 
     if(pthread_mutex_unlock(&read_lock) < 0) { printf("mount: read unlock\n"); return -1;}
 
@@ -48,134 +51,121 @@ int tfs_mount() {
 
     if(pthread_mutex_unlock(&session_lock) < 0) { printf("mount: session unlock\n"); return -1;}
 
-    if((sessions[session_id].client_pipe = open(pipename, O_WRONLY)) < 0) { printf("mount: open client pipe(%d)\n", sessions[session_id].client_pipe); return -1; }
+    if((client_pipe = open(pipename, O_WRONLY)) < 0) { printf("mount: open client pipe(%s) error(%d)\n", pipename, sessions[session_id].client_pipe); return -1; }
 
-    n = write(sessions[session_id].client_pipe, &session_id, sizeof(int));
+    if(session_id != -1) sessions[session_id].client_pipe = client_pipe;
+
+    n = write(client_pipe, &session_id, sizeof(int));
     if(n <= 0) { printf("mount: write sessionid\n"); return -1; }
-    /*printf("write sessionid\n");*/
-    
+    /*printf("write sessionid\n");
+    printf("mount: id(%d, %d), pipe(%d)\n", session_id, sessions[session_id].id, sessions[session_id].client_pipe);
+    */
     return 0;
 }
 
-int tfs_unmount() {
+void* tfs_unmount(void* arg) {
     /**/printf("unmount\n");
     ssize_t n;
-    int session_id, client_pipe, return_value = 0;
+    int client_pipe, return_value = 0;
+    session* s = (session*)arg;
 
-    n = read(server_pipe, &session_id, sizeof(int));
-    if(n <= 0) { printf("unmount: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
+    if(pthread_mutex_unlock(&read_lock) < 0) { printf("unmount: read unlock\n"); return NULL;}
 
-    if(pthread_mutex_unlock(&read_lock) < 0) { printf("unmount: read unlock\n"); return -1;}
+    if(pthread_mutex_lock(&session_lock) < 0) { printf("unmount: session lock\n"); return NULL; }
 
-    if(pthread_mutex_lock(&session_lock) < 0) { printf("unmount: session lock\n"); return -1; }
-
-    client_pipe = sessions[session_id].client_pipe;
-    sessions[session_id].client_pipe = -1;
+    client_pipe = sessions[s->id].client_pipe;
+    sessions[s->id].client_pipe = -1;
     active_sessions--;
 
-    if(pthread_mutex_unlock(&session_lock) < 0) { printf("unmount: session unlock\n"); return -1; }
+    if(pthread_mutex_unlock(&session_lock) < 0) { printf("unmount: session unlock\n"); return NULL; }
     
     n = write(client_pipe, &return_value, sizeof(int));
-    if(n <= 0) { printf("unmount: return(%d)\n", return_value); return -1; }
+    if(n <= 0) { printf("unmount: return(%d)\n", return_value); return NULL; }
 
     close(client_pipe);
-
-    return 0;
+    return NULL;
 }
 
-int tfs_server_open() {
+void* tfs_server_open(void* arg) {
     /**/printf("open\n");
     ssize_t n;
-    int session_id, flags, return_value = 0;
+    session* s = (session*)arg;
+    int flags, return_value = 0;
     char filename[MAX_NAME_SIZE];
 
-    n = read(server_pipe, &session_id, sizeof(int));
-    if(n <= 0) { printf("open: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
-    /*printf("session id: %d\n", session_id);*/
-
     n = read(server_pipe, filename, MAX_NAME_SIZE);
-    if(n <= 0) { printf("open: read filename\n"); pthread_mutex_unlock(&read_lock); return -1; }
+    if(n <= 0) { printf("open: read filename\n"); pthread_mutex_unlock(&read_lock); return NULL; }
     /*printf("file name: %s\n", filename);*/
 
     n = read(server_pipe, &flags, sizeof(int));
-    if(n <= 0) { printf("open: read flags\n"); pthread_mutex_unlock(&read_lock); return -1; }
+    if(n <= 0) { printf("open: read flags\n"); pthread_mutex_unlock(&read_lock); return NULL; }
     /*printf("flags: %d\n", flags);*/
 
-    if(pthread_mutex_unlock(&read_lock) < 0) { printf("open: read unlock\n"); return -1;}
+    if(pthread_mutex_unlock(&read_lock) < 0) { printf("open: read unlock\n"); return NULL;}
 
     return_value = tfs_open(filename, flags);
 
-    n = write(sessions[session_id].client_pipe, &return_value, sizeof(int));
-    if(n <= 0) { printf("open: write return\n"); return -1; }
+    n = write(s->client_pipe, &return_value, sizeof(int));
+    if(n <= 0) { printf("open: write return\n"); return NULL; }
 
-    return 0;
+    return NULL;
 }
 
-int tfs_server_close() {
+void* tfs_server_close(void* arg) {
     /**/printf("close\n");
     ssize_t n;
-    int session_id, fhandle, return_value = 0;
-
-    n = read(server_pipe, &session_id, sizeof(int));
-    if(n <= 0) { printf("close: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
-    /*printf("session id: %d\n", session_id);*/
+    session* s = (session*)arg;
+    int fhandle, return_value = 0;
 
     n = read(server_pipe, &fhandle, sizeof(int));
-    if(n <= 0) { printf("close: read fhandle\n"); pthread_mutex_unlock(&read_lock); return -1; }
+    if(n <= 0) { printf("close: read fhandle\n"); pthread_mutex_unlock(&read_lock); return NULL; }
     /*printf("fhandle: %d\n", fhandle);*/
 
-    if(pthread_mutex_unlock(&read_lock) < 0) { printf("close: read unlock\n"); return -1;}
+    if(pthread_mutex_unlock(&read_lock) < 0) { printf("close: read unlock\n"); return NULL;}
 
     return_value = tfs_close(fhandle);
 
-    n = write(sessions[session_id].client_pipe, &return_value, sizeof(int));
-    if(n <= 0) { printf("close: write return\n"); return -1; }
+    n = write(s->client_pipe, &return_value, sizeof(int));
+    if(n <= 0) { printf("close: write return\n"); return NULL; }
 
-    return 0;
+    return NULL;
 }
 
-int tfs_server_write() {
+void* tfs_server_write(void* arg) {
     /**/printf("write\n");
     ssize_t n, return_value = 0;
     size_t length;
-    int session_id, fhandle;
-
-    n = read(server_pipe, &session_id, sizeof(int));
-    if(n <= 0) { printf("write: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
-    /*printf("session id: %d\n", session_id);*/
+    session* s = (session*)arg;
+    int fhandle;
 
     n = read(server_pipe, &fhandle, sizeof(int));
-    if(n <= 0) { printf("write: read fhandle\n"); pthread_mutex_unlock(&read_lock); return -1; }
+    if(n <= 0) { printf("write: read fhandle\n"); pthread_mutex_unlock(&read_lock); return NULL; }
     /*printf("fhandle: %d\n", fhandle);*/
 
     n = read(server_pipe, &length, sizeof(size_t));
-    if(n <= 0) { printf("write: read length\n"); pthread_mutex_unlock(&read_lock); return -1; }
+    if(n <= 0) { printf("write: read length\n"); pthread_mutex_unlock(&read_lock); return NULL; }
     /*printf("length: %ld\n", length);*/
 
     char *buffer = (char*)malloc(sizeof(char)*length);
     n = read(server_pipe, buffer, length);
-    if(n <= 0) { printf("write: read buffer\n"); pthread_mutex_unlock(&read_lock); return -1; }
+    if(n <= 0) { printf("write: read buffer\n"); pthread_mutex_unlock(&read_lock); return NULL; }
     /*printf("buffer: %s\n", buffer);*/
 
-    if(pthread_mutex_unlock(&read_lock) < 0) { printf("write: read unlock\n"); return -1;}
+    if(pthread_mutex_unlock(&read_lock) < 0) { printf("write: read unlock\n"); return NULL;}
 
     return_value = tfs_write(fhandle, buffer, length);
 
-    n = write(sessions[session_id].client_pipe, &return_value, sizeof(ssize_t));
-    if(n <= 0) { printf("write: write return\n"); return -1; }
+    n = write(s->client_pipe, &return_value, sizeof(ssize_t));
+    if(n <= 0) { printf("write: write return\n"); return NULL; }
 
-    return 0;
+    return NULL;
 }
 
-int tfs_server_read() {
+int tfs_server_read(int session_id) {
     /**/printf("read\n");
     ssize_t n, return_value = 0;
     size_t length;
-    int session_id, fhandle;
-
-    n = read(server_pipe, &session_id, sizeof(int));
-    if(n <= 0) { printf("read: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
-    /*printf("session id: %d\n", session_id);*/
+    int fhandle;
 
     n = read(server_pipe, &fhandle, sizeof(int));
     if(n <= 0) { printf("read: read fhandle\n"); pthread_mutex_unlock(&read_lock); return -1; }
@@ -194,21 +184,17 @@ int tfs_server_read() {
     if(n <= 0) { printf("read: write return\n"); return -1; }
 
     if(return_value != -1) {
-        n = write(sessions[session_id].client_pipe, buffer, length);
+        n = write(sessions[session_id].client_pipe, buffer, (size_t)return_value);
         if(n <= 0) { printf("read: write buffer\n"); return -1; }
     }
 
     return 0;
 }
 
-int tfs_shutdown_after_all_closed(char *server_path) {
+int tfs_shutdown_after_all_closed(int session_id) {
     /**/printf("shutdown\n");
     ssize_t n;
-    int session_id, return_value = 0;
-
-    n = read(server_pipe, &session_id, sizeof(int));
-    if(n <= 0) { printf("shutdown: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
-    /*printf("session id: %d\n", session_id);*/
+    int return_value = 0;
 
     if(pthread_mutex_unlock(&read_lock) < 0) { printf("shutdown: read unlock\n"); return -1;}
 
@@ -235,8 +221,8 @@ int tfs_shutdown_after_all_closed(char *server_path) {
 int main(int argc, char **argv) {
 
     ssize_t n;
+    int session_id;
     char op_code;
-    char server_path[MAX_NAME_SIZE] = "/tmp/";
 
     if (argc < 2) {
         printf("Please specify the pathname of the server's pipe.\n");
@@ -250,8 +236,10 @@ int main(int argc, char **argv) {
     if(pthread_mutex_init(&read_lock, NULL)) { printf("main: read mutex init\n"); return -1; }
     if(pthread_mutex_init(&session_lock, NULL)) { printf("main: session mutex init\n"); return -1; }
 
-    for(int i = 0; i < MAX_SESSIONS; i++)
+    for(int i = 0; i < MAX_SESSIONS; i++) {
+        sessions[i].id = i;
         sessions[i].client_pipe = -1;
+    }
 
     if(tfs_init() == -1) { printf("main: tfs init\n"); return -1; }
 
@@ -285,32 +273,49 @@ int main(int argc, char **argv) {
 
         case TFS_OP_CODE_UNMOUNT:
         /*printf("unmount\n");*/
-            tfs_unmount();
+            n = read(server_pipe, &session_id, sizeof(int));
+            if(n <= 0) { printf("unmount: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
+            if(pthread_create(&sessions[session_id].tid, NULL, tfs_unmount, &sessions[session_id]) != 0) exit(1);
             break;
 
         case TFS_OP_CODE_OPEN:
         /*printf("open\n");*/
-            tfs_server_open();
+            n = read(server_pipe, &session_id, sizeof(int));
+            if(n <= 0) { printf("open: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
+            /*printf("session id: %d\n", session_id);*/
+            if(pthread_create(&sessions[session_id].tid, NULL, tfs_server_open, &sessions[session_id]) != 0) exit(1);
             break;
 
         case TFS_OP_CODE_CLOSE:
         /*printf("close\n");*/
-            tfs_server_close();
+            n = read(server_pipe, &session_id, sizeof(int));
+            if(n <= 0) { printf("close: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
+            /*printf("session id: %d\n", session_id);*/
+            if(pthread_create(&sessions[session_id].tid, NULL, tfs_server_close, &sessions[session_id]) != 0) exit(1);
             break;
 
         case TFS_OP_CODE_WRITE:
         /*printf("write\n");*/
-            tfs_server_write();
+            n = read(server_pipe, &session_id, sizeof(int));
+            if(n <= 0) { printf("write: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
+            /*printf("session id: %d\n", session_id);*/
+            if(pthread_create(&sessions[session_id].tid, NULL, tfs_server_write, &sessions[session_id]) != 0) exit(1);
             break;
 
         case TFS_OP_CODE_READ:
         /*printf("read\n");*/
-            tfs_server_read();
+            n = read(server_pipe, &session_id, sizeof(int));
+            if(n <= 0) { printf("read: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
+            /*printf("session id: %d\n", session_id);*/
+            tfs_server_read(session_id);
             break;
 
         case TFS_OP_CODE_SHUTDOWN_AFTER_ALL_CLOSED:
         /*printf("shutdown\n");*/
-            tfs_shutdown_after_all_closed(server_path);
+            n = read(server_pipe, &session_id, sizeof(int));
+            if(n <= 0) { printf("shutdown: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
+            /*printf("session id: %d\n", session_id);*/
+            tfs_shutdown_after_all_closed(session_id);
             break;
         
         default:

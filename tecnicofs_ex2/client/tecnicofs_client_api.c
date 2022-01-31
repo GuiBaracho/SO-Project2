@@ -30,12 +30,13 @@ int tfs_mount(char const *client_pipe_path, char const *server_pipe_path) {
 
     n = write(server_pipe, client_path, MAX_NAME_SIZE);
     if(n <= 0) return -1;
-    /*printf("write name\n");*/
+    /*printf("write name(%s)\n", client_path);*/
 
     if((client_pipe = open(client_path, O_RDONLY)) < 0) return -1;
     /*printf("open client\n");*/
     n = read(client_pipe, &session_id, sizeof(int));
     if(n <= 0) return -1;
+    if(session_id == -1){ printf("max session reached\n"); return -1; }
     /*printf("%d\n", session_id);*/
 
     return 0;
