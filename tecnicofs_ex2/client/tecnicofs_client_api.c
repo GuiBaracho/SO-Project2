@@ -9,7 +9,8 @@ static int session_id;
 int tfs_mount(char const *client_pipe_path, char const *server_pipe_path) {
     /* TODO: Implement this */
     ssize_t n;
-    char op_code = TFS_OP_CODE_MOUNT;
+    char msg[MAX_NAME_SIZE + 1];
+    msg[0] = TFS_OP_CODE_MOUNT;
     
     strcat(server_path, server_pipe_path);
     /*printf("%s\n", server_path);*/
@@ -24,13 +25,11 @@ int tfs_mount(char const *client_pipe_path, char const *server_pipe_path) {
     if((server_pipe = open(server_path, O_WRONLY)) < 0) return -1;
     /*printf("open server\n");*/
 
-    n = write(server_pipe, &op_code, sizeof(char));
+    memcpy(&(msg[1]), client_path, MAX_NAME_SIZE);
+
+    n = write(server_pipe, msg, MAX_NAME_SIZE + 1);
     if(n <= 0) return -1;
     /*printf("write opcode: %c\n", op_code);*/
-
-    n = write(server_pipe, client_path, MAX_NAME_SIZE);
-    if(n <= 0) return -1;
-    /*printf("write name(%s)\n", client_path);*/
 
     if((client_pipe = open(client_path, O_RDONLY)) < 0) return -1;
     /*printf("open client\n");*/
@@ -46,15 +45,15 @@ int tfs_unmount() {
     /* TODO: Implement this */
     ssize_t n;
     int return_value;
-    char op_code = TFS_OP_CODE_UNMOUNT;
+    char msg[1 + sizeof(session_id)];
+    msg[0] = TFS_OP_CODE_UNMOUNT;
+    
+    memcpy(&(msg[1]), &session_id, sizeof(session_id));
     /*printf("start\n");*/
-    n = write(server_pipe, &op_code, sizeof(char));
+
+    n = write(server_pipe, msg, sizeof(char) + sizeof(session_id));
     if(n <= 0) return -1;
     /*printf("opcode\n");*/
-
-    n = write(server_pipe, &session_id, sizeof(int));
-    if(n <= 0) return -1;
-    /*printf("sessionid\n");*/
 
     n = read(client_pipe, &return_value, sizeof(int));
     if(n <= 0) return -1;
@@ -71,28 +70,20 @@ int tfs_open(char const *name, int flags) {
     /*printf("\nopen\n");*/
     ssize_t n;
     int return_value;
-    char op_code = TFS_OP_CODE_OPEN;
+    char msg[1 + sizeof(session_id) + MAX_NAME_SIZE + sizeof(flags)];
+    msg[0] = TFS_OP_CODE_OPEN;
     char filename[MAX_NAME_SIZE];
 
     strcpy(filename, name);
     for(int i = (int)strlen(filename); i < MAX_NAME_SIZE; i++)
         filename[i] = '\0';
 
-    n = write(server_pipe, &op_code, sizeof(char));
-    if(n <= 0) return -1;
-    /*printf("opcode\n");*/
+    memcpy(&(msg[1]), &session_id, sizeof(session_id));
+    memcpy(&(msg[1 + sizeof(session_id)]), filename, MAX_NAME_SIZE);
+    memcpy(&(msg[1 + sizeof(session_id)]) + MAX_NAME_SIZE, &flags, sizeof(flags));
 
-    n = write(server_pipe, &session_id, sizeof(int));
-    if(n <= 0) return -1;
-    /*printf("sessionid\n");*/
-
-    n = write(server_pipe, name, MAX_NAME_SIZE);
-    if(n <= 0) return -1;
-    /*printf("name\n");*/
-
-    n = write(server_pipe, &flags, sizeof(int));
-    if(n <= 0) return -1;
-    /*printf("flags %d\n", flags);*/
+    n = write(server_pipe, msg, 1 + sizeof(session_id) + MAX_NAME_SIZE + sizeof(flags));
+    if(n <= 0) return -1;   
 
     n = read(client_pipe, &return_value, sizeof(int));
     if(n <= 0) return -1;
@@ -104,15 +95,13 @@ int tfs_close(int fhandle) {
     /* TODO: Implement this */
     ssize_t n;
     int return_value;
-    char op_code = TFS_OP_CODE_CLOSE;
+    char msg[1 + sizeof(session_id) + sizeof(fhandle)];
+    msg[0] = TFS_OP_CODE_CLOSE;
 
-    n = write(server_pipe, &op_code, sizeof(char));
-    if(n <= 0) return -1;
+    memcpy(&(msg[1]), &session_id, sizeof(session_id));
+    memcpy(&(msg[1 + sizeof(session_id)]), &fhandle, sizeof(fhandle));
 
-    n = write(server_pipe, &session_id, sizeof(int));
-    if(n <= 0) return -1;
-
-    n = write(server_pipe, &fhandle, sizeof(int));
+    n = write(server_pipe, msg, 1 + sizeof(session_id) + sizeof(fhandle));
     if(n <= 0) return -1;
 
     n = read(client_pipe, &return_value, sizeof(int));
@@ -124,22 +113,16 @@ int tfs_close(int fhandle) {
 ssize_t tfs_write(int fhandle, void const *buffer, size_t length) {
     /* TODO: Implement this */
     ssize_t n, return_value;
-    char op_code = TFS_OP_CODE_WRITE;
+    char msg[1 + sizeof(session_id) + sizeof(fhandle) + sizeof(length) + length];
+    msg[0] = TFS_OP_CODE_WRITE;
 
-    n = write(server_pipe, &op_code, sizeof(char));
-    if(n <= 0) return -1;
+    memcpy(&(msg[1]), &session_id, sizeof(session_id));
+    memcpy(&(msg[1 + sizeof(session_id)]), &fhandle, sizeof(fhandle));
+    memcpy(&(msg[1 + sizeof(session_id) + sizeof(fhandle)]), &length, sizeof(length));
+    memcpy(&(msg[1 + sizeof(session_id) + sizeof(fhandle) + sizeof(length)]), buffer, length);
 
-    n = write(server_pipe, &session_id, sizeof(int));
+    n = write(server_pipe, msg, 1 + sizeof(session_id) + sizeof(fhandle) + sizeof(length) + length);
     if(n <= 0) return -1;
-
-    n = write(server_pipe, &fhandle, sizeof(int));
-    if(n <= 0) return -1;
-
-    n = write(server_pipe, &length, sizeof(size_t));
-    if(n <= 0) return -1;
-    
-    n = write(server_pipe, buffer, length);
-    if(n <= 0) return -1;  
 
     n = read(client_pipe, &return_value, sizeof(ssize_t));
     if(n <= 0) return -1;
@@ -150,18 +133,14 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t length) {
 ssize_t tfs_read(int fhandle, void *buffer, size_t length) {
     /* TODO: Implement this */
     ssize_t n, return_value;
-    char op_code = TFS_OP_CODE_READ;
+    char msg[1 + sizeof(session_id) + sizeof(fhandle) + sizeof(length)];
+    msg[0] = TFS_OP_CODE_READ;
 
-    n = write(server_pipe, &op_code, sizeof(char));
-    if(n <= 0) return -1;
+    memcpy(&(msg[1]), &session_id, sizeof(session_id));
+    memcpy(&(msg[1 + sizeof(session_id)]), &fhandle, sizeof(fhandle));
+    memcpy(&(msg[1 + sizeof(session_id) + sizeof(fhandle)]), &length, sizeof(length));
 
-    n = write(server_pipe, &session_id, sizeof(int));
-    if(n <= 0) return -1;
-
-    n = write(server_pipe, &fhandle, sizeof(int));
-    if(n <= 0) return -1;
-
-    n = write(server_pipe, &length, sizeof(size_t));
+    n = write(server_pipe, msg, 1 + sizeof(session_id) + sizeof(fhandle) + sizeof(length));
     if(n <= 0) return -1;
 
     n = read(client_pipe, &return_value, sizeof(ssize_t));
@@ -179,12 +158,12 @@ int tfs_shutdown_after_all_closed() {
     /* TODO: Implement this */
     ssize_t n;
     int return_value;
-    char op_code = TFS_OP_CODE_SHUTDOWN_AFTER_ALL_CLOSED;
+    char msg[1 + sizeof(session_id)];
+    msg[0] = TFS_OP_CODE_SHUTDOWN_AFTER_ALL_CLOSED;
+    
+    memcpy(&(msg[1]), &session_id, sizeof(session_id));
 
-    n = write(server_pipe, &op_code, sizeof(char));
-    if(n <= 0) return -1;
-
-    n = write(server_pipe, &session_id, sizeof(int));
+    n = write(server_pipe, msg, 1 + sizeof(session_id));
     if(n <= 0) return -1;
 
     n = read(client_pipe, &return_value, sizeof(int));

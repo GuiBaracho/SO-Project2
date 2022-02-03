@@ -96,7 +96,6 @@ void* tfs_server_open(void* arg) {
     n = read(server_pipe, filename, MAX_NAME_SIZE);
     if(n <= 0) { printf("open: read filename\n"); pthread_mutex_unlock(&read_lock); return NULL; }
     /*printf("file name: %s\n", filename);*/
-
     n = read(server_pipe, &flags, sizeof(int));
     if(n <= 0) { printf("open: read flags\n"); pthread_mutex_unlock(&read_lock); return NULL; }
     /*printf("flags: %d\n", flags);*/
@@ -107,6 +106,8 @@ void* tfs_server_open(void* arg) {
 
     n = write(s->client_pipe, &return_value, sizeof(int));
     if(n <= 0) { printf("open: write return\n"); return NULL; }
+
+    /*printf("open done\n");*/
 
     return NULL;
 }
@@ -311,7 +312,7 @@ int main(int argc, char **argv) {
             break;
 
         case TFS_OP_CODE_READ:
-        /*printf("read\n");*/
+        /**/printf("read\n");
             n = read(server_pipe, &session_id, sizeof(int));
             if(n <= 0) { printf("read: read sessionid\n"); pthread_mutex_unlock(&read_lock); return -1; }
             /*printf("session id: %d\n", session_id);*/
