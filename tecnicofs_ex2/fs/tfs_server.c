@@ -36,10 +36,10 @@ int tfs_mount() {
 
     n = read(server_pipe, pipename, 40);
     if(n <= 0) { printf("mount: read pipename\n"); return -1; }
-    /*printf("%s\n", pipename);*/
+    /**/printf("%s\n", pipename);
 
-    if(pthread_mutex_lock(&(free_threads_lock)) != 0) return -1;
-
+    if(pthread_mutex_lock(&free_threads_lock) != 0) { printf("mount: lock error\n");  return -1; }
+    /**/printf("mount: inside lock\n");
     for(int i = 0; i < MAX_SESSIONS; i++) {
         if(free_threads[i] == -1) {
             free_threads[i] = 0;
@@ -50,16 +50,42 @@ int tfs_mount() {
 
     if(pthread_mutex_unlock(&(free_threads_lock)) != 0) return -1;
 
-    /*printf("session id mount (%d)", session_id);*/
+    /**/printf("session id mount (%d)\n", session_id);
 
-    if((client_pipe = open(pipename, O_WRONLY)) < 0) { printf("mount: open client pipe(%d)\n", client_pipe); return -1; }
+    if(session_id == -1) {
+        if((client_pipe = open(pipename, O_WRONLY)) < 0) { printf("mount: open client pipe(%d)\n", client_pipe); return -1; }
+        n = write(client_pipe, &session_id, sizeof(int));
+        if(n <= 0) { printf("mount: write sessionid\n"); return -1; }
+        /**/printf("write sessionid\n");
 
-    n = write(client_pipe, &session_id, sizeof(int));
+    } else {
+        char* msg_buff = malloc(1+MAX_NAME_SIZE);
+        msg_buff[0] = TFS_OP_CODE_MOUNT;
+        memcpy(&(msg_buff[1]), pipename, MAX_NAME_SIZE);
+        /*printf("msg: %s\n", msg_buff);*/
+        if(pthread_mutex_lock(&(tfs_threads[session_id].thread_lock)) != 0) return -1;
+        tfs_threads[session_id].msg = msg_buff;
+        if(pthread_mutex_unlock(&(tfs_threads[session_id].thread_lock)) != 0) return -1;
+        pthread_cond_signal(&(tfs_threads[session_id].canRead));
+    }
+
+    /**/printf("mount end\n");
+    
+    return 0;
+}
+
+int tfs_mount_aux(thread* t) {
+    /**/printf("mount aux\n");
+    ssize_t n;
+    char pipename[MAX_NAME_SIZE];
+
+    memcpy(pipename, &(t->msg[1]), MAX_NAME_SIZE);
+
+    if((t->client_pipe = open(pipename, O_WRONLY)) < 0) { printf("mount aux: open client pipe(%d)\n", t->client_pipe); return -1; }
+
+    n = write(t->client_pipe, &(t->id), sizeof(int));
     if(n <= 0) { printf("mount: write sessionid\n"); return -1; }
     /*printf("write sessionid\n");*/
-
-    if(session_id != -1) tfs_threads[session_id].client_pipe = client_pipe;
-    
     return 0;
 }
 
@@ -209,16 +235,16 @@ void* thread_main(void* arg) {
     while(1) {
         
         if(pthread_mutex_lock(&(t->thread_lock)) != 0) return NULL;
-        /*printf(t->msg == NULL ? "intside true\n" : "intside false\n");*/
+        /*printf(t->msg == NULL ? "intside true\n" : "inside false\n");*/
         while(t->msg == NULL) {
             pthread_cond_wait(&(t->canRead), &(t->thread_lock));
         }
 
-
+        /*printf(t->msg[0] == TFS_OP_CODE_MOUNT ? "true\n" : "false\n");*/
         switch(t->msg[0]) {
         case TFS_OP_CODE_MOUNT:
-        /*printf("mount\n");*/
-            tfs_mount();
+        /**/printf("thread mount\n");
+            tfs_mount_aux(t);
             break;
 
         case TFS_OP_CODE_UNMOUNT:
