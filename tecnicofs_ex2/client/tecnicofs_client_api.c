@@ -1,5 +1,7 @@
 #include "tecnicofs_client_api.h"
 
+#define BLOCK_SIZE (1024)
+
 static int server_pipe;
 char server_path[MAX_NAME_SIZE] = "/tmp/";
 static int client_pipe;
@@ -113,15 +115,17 @@ int tfs_close(int fhandle) {
 ssize_t tfs_write(int fhandle, void const *buffer, size_t length) {
     /* TODO: Implement this */
     ssize_t n, return_value;
-    char msg[1 + sizeof(session_id) + sizeof(fhandle) + sizeof(length) + length];
+    char msg[1 + sizeof(session_id) + sizeof(fhandle) + sizeof(length) + BLOCK_SIZE];
     msg[0] = TFS_OP_CODE_WRITE;
+
+    
 
     memcpy(&(msg[1]), &session_id, sizeof(session_id));
     memcpy(&(msg[1 + sizeof(session_id)]), &fhandle, sizeof(fhandle));
     memcpy(&(msg[1 + sizeof(session_id) + sizeof(fhandle)]), &length, sizeof(length));
-    memcpy(&(msg[1 + sizeof(session_id) + sizeof(fhandle) + sizeof(length)]), buffer, length);
+    memcpy(&(msg[1 + sizeof(session_id) + sizeof(fhandle) + sizeof(length)]), buffer, BLOCK_SIZE);
 
-    n = write(server_pipe, msg, 1 + sizeof(session_id) + sizeof(fhandle) + sizeof(length) + length);
+    n = write(server_pipe, msg, 1 + sizeof(session_id) + sizeof(fhandle) + sizeof(length) + BLOCK_SIZE);
     if(n <= 0) return -1;
 
     n = read(client_pipe, &return_value, sizeof(ssize_t));
