@@ -14,7 +14,7 @@ INCLUDES = $(addprefix -I, $(INCLUDE_DIRS))
 SOURCES  := $(wildcard */*.c)
 HEADERS  := $(wildcard */*.h)
 OBJECTS  := $(SOURCES:.c=.o)
-TARGET_EXECS := fs/tfs_server tests/lib_destroy_after_all_closed_test tests/client_server_simple_test tests/client_server_shutdown
+TARGET_EXECS := fs/tfs_server tests/lib_destroy_after_all_closed_test tests/client_server_simple_test tests/client_server_shutdown tests/client_server_shutdown_test tests/block_destroy_simple tests/client_server_test
 
 # VPATH is a variable used by Makefile which finds *sources* and makes them available throughout the codebase
 # vpath %.h <DIR> tells make to look for header files in <DIR>
@@ -68,6 +68,9 @@ fmt: $(SOURCES) $(HEADERS)
 # the CC, LD, CFLAGS and LDFLAGS are used in this rule
 tests/client_server_simple_test: tests/client_server_simple_test.o client/tecnicofs_client_api.o
 tests/client_server_shutdown: tests/client_server_shutdown.o client/tecnicofs_client_api.o
+tests/block_destroy_simple: tests/block_destroy_simple.o fs/operations.o fs/state.o
+tests/client_server_shutdown_test: tests/client_server_shutdown_test.o client/tecnicofs_client_api.o
+tests/client_server_test: tests/client_server_test.o client/tecnicofs_client_api.o
 fs/tfs_server: fs/operations.o fs/state.o
 tests/lib_destroy_after_all_closed_test: fs/operations.o fs/state.o
 

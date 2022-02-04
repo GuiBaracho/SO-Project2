@@ -8,7 +8,7 @@
 #include <pthread.h>
 #include "operations.h"
 
-#define MAX_SESSIONS 10
+#define MAX_SESSIONS 50
 
 typedef struct {
 
@@ -29,17 +29,17 @@ static int server_pipe;
 char server_path[MAX_NAME_SIZE] = "/tmp/";
 
 int tfs_mount() {
-    /**/printf("mount\n");
+    /*printf("mount\n");*/
     ssize_t n;
     int client_pipe, session_id = -1;
     char pipename[MAX_NAME_SIZE];
 
     n = read(server_pipe, pipename, 40);
     if(n <= 0) { printf("mount: read pipename\n"); return -1; }
-    /**/printf("%s\n", pipename);
+    /*printf("%s\n", pipename);*/
 
     if(pthread_mutex_lock(&free_threads_lock) != 0) { printf("mount: lock error\n");  return -1; }
-    /**/printf("mount: inside lock\n");
+    /*printf("mount: inside lock\n");*/
     for(int i = 0; i < MAX_SESSIONS; i++) {
         if(free_threads[i] == -1) {
             free_threads[i] = 0;
@@ -50,13 +50,13 @@ int tfs_mount() {
 
     if(pthread_mutex_unlock(&(free_threads_lock)) != 0) return -1;
 
-    /**/printf("session id mount (%d)\n", session_id);
+    /*printf("session id mount (%d)\n", session_id);*/
 
     if(session_id == -1) {
         if((client_pipe = open(pipename, O_WRONLY)) < 0) { printf("mount: open client pipe(%d)\n", client_pipe); return -1; }
         n = write(client_pipe, &session_id, sizeof(int));
         if(n <= 0) { printf("mount: write sessionid\n"); return -1; }
-        /**/printf("write sessionid\n");
+        /*printf("write sessionid\n");*/
 
     } else {
         char* msg_buff = malloc(1+MAX_NAME_SIZE);
@@ -69,13 +69,13 @@ int tfs_mount() {
         pthread_cond_signal(&(tfs_threads[session_id].canRead));
     }
 
-    /**/printf("mount end\n");
+    /*printf("mount end\n");*/
     
     return 0;
 }
 
 int tfs_mount_aux(thread* t) {
-    /**/printf("mount aux\n");
+    /*printf("mount aux\n");*/
     ssize_t n;
     char pipename[MAX_NAME_SIZE];
 
@@ -90,7 +90,7 @@ int tfs_mount_aux(thread* t) {
 }
 
 int tfs_unmount(thread* t) {
-    /**/printf("unmount\n");
+    /*printf("unmount\n");*/
     ssize_t n;
     int return_value = 0;
     
@@ -109,7 +109,7 @@ int tfs_unmount(thread* t) {
 }
 
 int tfs_server_open(char* msg, int client_pipe) {
-    /**/printf("tfs_open\n");
+    /*printf("tfs_open\n");*/
     ssize_t n;
     int flags, return_value = 0;
     char filename[MAX_NAME_SIZE];
@@ -130,7 +130,7 @@ int tfs_server_open(char* msg, int client_pipe) {
 }
 
 int tfs_server_close(char* msg, int client_pipe) {
-    /**/printf("close\n");
+    /*printf("close\n");*/
     ssize_t n;
     int fhandle, return_value = 0;
 
@@ -146,7 +146,7 @@ int tfs_server_close(char* msg, int client_pipe) {
 }
 
 int tfs_server_write(char* msg, int client_pipe) {
-    /**/printf("write\n");
+    /*printf("write\n");*/
     ssize_t n, return_value = 0;
     size_t length;
     int fhandle;
@@ -172,7 +172,7 @@ int tfs_server_write(char* msg, int client_pipe) {
 }
 
 int tfs_server_read(char* msg, int client_pipe) {
-    /**/printf("thread read\n");
+    /*printf("thread read\n");*/
     ssize_t n, return_value = 0;
     size_t length;
     int fhandle;
@@ -201,7 +201,7 @@ int tfs_server_read(char* msg, int client_pipe) {
 }
 
 int tfs_shutdown_after_all_closed(char* msg, int client_pipe) {
-    /**/printf("shutdown\n");
+    /*printf("shutdown\n");*/
     ssize_t n;
     int return_value = 0;
 
@@ -229,7 +229,7 @@ int tfs_shutdown_after_all_closed(char* msg, int client_pipe) {
 
 void* thread_main(void* arg) {
     thread* t = (thread*)arg;
-    /**/printf("thread_main(%d)\n", t->id);
+    /*printf("thread_main(%d)\n", t->id);*/
     /*printf(t->msg == NULL ? "outside true\n" : "outside false\n");*/
 
     while(1) {
@@ -243,7 +243,7 @@ void* thread_main(void* arg) {
         /*printf(t->msg[0] == TFS_OP_CODE_MOUNT ? "true\n" : "false\n");*/
         switch(t->msg[0]) {
         case TFS_OP_CODE_MOUNT:
-        /**/printf("thread mount\n");
+        /*printf("thread mount\n");*/
             tfs_mount_aux(t);
             break;
 
@@ -335,7 +335,7 @@ int main(int argc, char **argv) {
         n = read(server_pipe, &op_code, sizeof(char));
         if(n < 0) { printf("main: read opcode\n"); return -1; }
         else if(n == 0) {
-            printf("main: n == 0\n");
+            /*printf("main: n == 0\n");*/
             close(server_pipe);
             unlink(server_path);
             if(mkfifo(server_path, 0777) < 0) { printf("main: mkfifo\n"); return -1; }
