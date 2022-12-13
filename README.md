@@ -1,4 +1,4 @@
-# Operating Systems Project - LEIC @ IST 2012/2022
-Project for the "Operating Systems" class @ Instituto Superior Técnico, Lisbon 2021/2022
+# Operating Systems Project
+Operating Systems group project - LEIC 2021/2022 @ IST
 
 Code by João Baracho and Guilherme Baracho
